@@ -4,6 +4,8 @@ import numpy as np
 import pyrealsense2 as rs
 import time
 
+#this code is the best code
+
 class TrackedObject:
     """Class representing objects being tracked."""
     def __init__(self, contour, first_seen):
@@ -22,7 +24,7 @@ async def process_frames():
 
     try:
         current_objects = []
-        lost_object_timer = None
+        largest_persistent_obj = None
 
         while True:
             frames = await asyncio.to_thread(pipeline.wait_for_frames)
@@ -58,8 +60,6 @@ async def process_frames():
                         obj.last_seen = current_time  # Update last seen time
                         if current_time - obj.first_seen > 3:
                             obj.is_persistent = True  # Mark as persistent if visible for more than 3 seconds
-                            if lost_object_timer is not None:
-                                lost_object_timer = None  # Reset lost object timer if persistent object found
                         found = True
                         break
                 if not found:
@@ -68,40 +68,24 @@ async def process_frames():
 
             # Process current objects for visualization
             largest_area = 0
-            largest_persistent_obj = None
             for obj in current_objects:
                 x, y, w, h = cv2.boundingRect(obj.contour)
-                cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Draw red frame
+                cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 0, 255), 2)  # Draw red frame for all detected objects
                 if obj.is_persistent:
-                    cv2.rectangle(color_image, (x, y), (x + w, y + h), (255, 0, 0), 2)  # Draw blue frame if persistent
                     area = cv2.contourArea(obj.contour)
                     if area > largest_area:
                         largest_area = area
                         largest_persistent_obj = obj
 
-            # Highlight the largest persistent object
+            # Highlight the largest persistent object in green
             if largest_persistent_obj:
-                x, y, w, h = cv2.boundingRect(largest_persistent_obj.contour)
-                cv2.rectangle(color_image, (x, y), (x + w, y + h), (0, 255, 0), 2)  # Green frame for the largest object
+                cv2.drawContours(color_image, [largest_persistent_obj.contour], -1, (0, 255, 0), 2)
                 M = cv2.moments(largest_persistent_obj.contour)
-                if M["m00"] != 0:  # Avoid division by zero
+                if M["m00"] != 0:
                     cX = int(M["m10"] / M["m00"])
                     cY = int(M["m01"] / M["m00"])
-                    cv2.circle(color_image, (cX, cY), 5, (0, 255, 0), -1)  # Center of gravity
-                    print("Center of green object: ({}, {})".format(cX, cY))  # Debug print
-                else:
-                    if lost_object_timer is None:
-                        lost_object_timer = time.time()
-                    elif time.time() - lost_object_timer > 3:
-                        print("Lost object, waiting for 3 seconds again...")
-                        lost_object_timer = None
-
-            else:
-                if lost_object_timer is None:
-                    lost_object_timer = time.time()
-                elif time.time() - lost_object_timer > 3:
-                    print("No obstacle detected, center: (0, 0)")
-                    lost_object_timer = None
+                    cv2.circle(color_image, (cX, cY), 5, (0, 255, 0), -1)  # Center of gravity for the largest object
+                    print("Center of largest object: ({}, {})".format(cX, cY))  # Debug print
 
             # Display the frame
             cv2.imshow("Detected Red Objects", color_image)
